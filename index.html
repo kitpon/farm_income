@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thailand Agricultural Intelligence Dashboard</title>
+    <!-- Google Fonts: Kanit and Sarabun -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-section">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-seedling"></i>
+                </div>
+                <div>
+                    <h1 class="app-title">Thailand Agricultural Intelligence</h1>
+                    <p class="app-subtitle">ระบบเฝ้าระวังดัชนีผลผลิต ราคา และรายได้เกษตรกร</p>
+                </div>
+            </div>
+            <div class="control-section">
+                <div class="update-info">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>อัปเดตล่าสุด: <span id="last-updated-time">กำลังโหลด...</span></span>
+                </div>
+                <button id="refresh-btn" class="btn btn-refresh">
+                    <i class="fa-solid fa-rotate"></i> รีเฟรชข้อมูล
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <!-- KPI Row -->
+        <section class="kpi-grid">
+            <!-- Production Index Card -->
+            <div class="kpi-card" id="kpi-production">
+                <div class="kpi-icon icon-dark-grey">
+                    <i class="fa-solid fa-wheat-awn"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ดัชนีผลผลิตสินค้าเกษตร</span>
+                    <h2 class="kpi-value" id="kpi-production-val">-</h2>
+                    <span class="kpi-change" id="kpi-production-change">-</span>
+                </div>
+            </div>
+            <!-- Price Index Card -->
+            <div class="kpi-card" id="kpi-price">
+                <div class="kpi-icon icon-red">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ดัชนีราคาสินค้าเกษตร</span>
+                    <h2 class="kpi-value" id="kpi-price-val">-</h2>
+                    <span class="kpi-change" id="kpi-price-change">-</span>
+                </div>
+            </div>
+            <!-- Farm Income Index Card -->
+            <div class="kpi-card" id="kpi-income">
+                <div class="kpi-icon icon-vino">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ดัชนีรายได้เกษตรกร (คำนวณ)</span>
+                    <h2 class="kpi-value" id="kpi-income-val">-</h2>
+                    <span class="kpi-change" id="kpi-income-change">-</span>
+                </div>
+            </div>
+            <!-- Pork Price Card -->
+            <div class="kpi-card" id="kpi-pork">
+                <div class="kpi-icon icon-orange">
+                    <i class="fa-solid fa-piggy-bank"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ราคาสุกรมีชีวิต (เกิน 100 กก.)</span>
+                    <h2 class="kpi-value" id="kpi-pork-val">-</h2>
+                    <span class="kpi-change" id="kpi-pork-change">-</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="tab-overview">
+                <i class="fa-solid fa-chart-line"></i> ภาพรวมดัชนี (Macro Indices)
+            </button>
+            <button class="tab-btn" data-tab="tab-pork">
+                <i class="fa-solid fa-pig"></i> เฝ้าระวังราคาสุกร (Pork Monitor)
+            </button>
+            <button class="tab-btn" data-tab="tab-crops">
+                <i class="fa-solid fa-plant-wilt"></i> ราคาพืชผลสำคัญ (Key Crops)
+            </button>
+            <button class="tab-btn" data-tab="tab-production">
+                <i class="fa-solid fa-warehouse"></i> สถิติผลผลิตรายปี (Crop Production)
+            </button>
+            <button class="tab-btn" data-tab="tab-daily">
+                <i class="fa-solid fa-calendar-day"></i> ติดตามราคารายวัน (Daily Lime)
+            </button>
+        </nav>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner-container">
+                <div class="spinner"></div>
+                <p>กำลังโหลดข้อมูลจากระบบ NABC...</p>
+            </div>
+        </div>
+
+        <!-- Tab Contents -->
+        <div class="tab-content-container">
+            <!-- TAB 1: OVERVIEW -->
+            <div class="tab-pane active" id="tab-overview">
+                <div class="content-row">
+                    <div class="chart-card large-chart">
+                        <div class="card-header">
+                            <h3 class="card-title">แนวโน้มดัชนีผลผลิต ราคา และรายได้ภาคเกษตรกรรม</h3>
+                            <p class="card-desc">เปรียบเทียบดัชนีรายเดือน (ปีฐาน 2563 = 100)</p>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="overviewChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3 class="card-title">บทวิเคราะห์ภาพรวมภาคเกษตร</h3>
+                        </div>
+                        <div class="insight-content" id="overview-insights">
+                            <p>กำลังประมวลผลบทวิเคราะห์...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="content-row mt-4">
+                    <div class="chart-card full-width">
+                        <div class="card-header flex-header">
+                            <div>
+                                <h3 class="card-title">ความสัมพันธ์ของการเปลี่ยนแปลงดัชนีรายปีกับรายได้เกษตรกร</h3>
+                                <p class="card-desc">อัตราการเปลี่ยนแปลงผลผลิตและราคา (YoY %) เทียบกับระดับดัชนีรายได้เกษตรกร (ปีฐาน 2563 = 100)</p>
+                            </div>
+                            <!-- Sliding Segment Switch -->
+                            <div class="segmented-control">
+                                <input type="radio" id="overview-mode-chart" name="overview-view-mode" value="chart" checked>
+                                <label for="overview-mode-chart"><i class="fa-solid fa-chart-bar"></i> แสดงกราฟ</label>
+                                
+                                <input type="radio" id="overview-mode-table" name="overview-view-mode" value="table">
+                                <label for="overview-mode-table"><i class="fa-solid fa-table"></i> แสดงตาราง</label>
+                                
+                                <span class="selection-slide"></span>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Container -->
+                        <div id="overview-chart-view" class="view-container">
+                            <div class="chart-wrapper-tall">
+                                <canvas id="overviewChangesChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Table Container -->
+                        <div id="overview-table-view" class="view-container hidden">
+                            <div class="table-container" style="max-height: 480px; overflow-y: auto;">
+                                <table class="table table-striped" id="overview-changes-table">
+                                    <thead>
+                                        <tr>
+                                            <th>เดือน/ปี (พ.ศ.)</th>
+                                            <th class="text-right">ดัชนีผลผลิต</th>
+                                            <th class="text-right">เปลี่ยนแปลงผลผลิต (YoY %)</th>
+                                            <th class="text-right">ดัชนีราคา</th>
+                                            <th class="text-right">เปลี่ยนแปลงราคา (YoY %)</th>
+                                            <th class="text-right">ดัชนีรายได้เกษตรกร</th>
+                                            <th class="text-right">เปลี่ยนแปลงรายได้ (YoY %)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="7" class="text-center">กำลังโหลดข้อมูล...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: PORK MONITOR -->
+            <div class="tab-pane" id="tab-pork">
+                <div class="content-row">
+                    <div class="chart-card large-chart">
+                        <div class="card-header">
+                            <h3 class="card-title">แนวโน้มราคาสุกรมีชีวิต หน้าฟาร์ม</h3>
+                            <p class="card-desc">เปรียบเทียบข้อมูลรายสัปดาห์และรายเดือน (บาทต่อกิโลกรัม)</p>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="porkChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3 class="card-title">สรุปราคาสุกรและเปรียบเทียบ</h3>
+                        </div>
+                        <div class="insight-content">
+                            <div class="stat-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">ราคาปัจจุบัน (สัปดาห์ล่าสุด)</span>
+                                    <span class="stat-val text-orange" id="pork-latest-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">ราคาเฉลี่ยรายเดือนล่าสุด</span>
+                                    <span class="stat-val" id="pork-monthly-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">ราคาสูงสุดรอบ 2 ปี</span>
+                                    <span class="stat-val text-red" id="pork-max-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">ราคาต่ำสุดรอบ 2 ปี</span>
+                                    <span class="stat-val text-vino" id="pork-min-val">-</span>
+                                </div>
+                            </div>
+                            <hr class="card-divider">
+                            <div id="pork-insights">
+                                <p>กำลังโหลดบทวิเคราะห์ราคาสุกร...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-row mt-4">
+                    <div class="chart-card full-width">
+                        <div class="card-header">
+                            <h3 class="card-title">เปรียบเทียบราคา สุกร VS กระบือ ขนาดกลาง</h3>
+                            <p class="card-desc">แนวโน้มราคาหน้าฟาร์มสัปดาห์ต่อสัปดาห์</p>
+                        </div>
+                        <div class="chart-wrapper-tall">
+                            <canvas id="porkBuffaloChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: KEY CROPS -->
+            <div class="tab-pane" id="tab-crops">
+                <div class="control-row">
+                    <div class="form-group">
+                        <label for="crop-select"><i class="fa-solid fa-filter"></i> เลือกสินค้าเกษตร:</label>
+                        <select id="crop-select" class="form-select">
+                            <option value="rubber">ยางพารา (Rubber)</option>
+                            <option value="cassava">มันสำปะหลัง (Cassava)</option>
+                            <option value="corn">ข้าวโพดเลี้ยงสัตว์ (Feed Corn)</option>
+                            <option value="oilpalm">ปาล์มน้ำมัน (Oil Palm)</option>
+                            <option value="rice">ข้าวเปลือก (Paddy Rice)</option>
+                        </select>
+                    </div>
+                    <div class="crop-info-banner">
+                        <span id="crop-unit-badge" class="badge badge-gold">บาท/กก.</span>
+                    </div>
+                </div>
+                <div class="content-row">
+                    <div class="chart-card large-chart">
+                        <div class="card-header">
+                            <h3 class="card-title" id="crop-chart-title">แนวโน้มราคาพืชผล</h3>
+                            <p class="card-desc">ความเคลื่อนไหวราคารายสัปดาห์ล่าสุด</p>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="cropChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3 class="card-title">รายละเอียดสินค้าและราคาสุดท้าย</h3>
+                        </div>
+                        <div class="insight-content">
+                            <div class="table-container">
+                                <table class="table" id="crop-products-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ชื่อสินค้า</th>
+                                            <th class="text-right">ราคา</th>
+                                            <th>หน่วย</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3" class="text-center">กำลังโหลดข้อมูล...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="crop-analysis mt-4" id="crop-insights">
+                                <p>กำลังโหลดบทวิเคราะห์พืชผล...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: PRODUCTION STATS -->
+            <div class="tab-pane" id="tab-production">
+                <div class="control-row">
+                    <div class="form-group">
+                        <label for="prod-crop-select"><i class="fa-solid fa-filter"></i> เลือกชนิดพืช:</label>
+                        <select id="prod-crop-select" class="form-select">
+                            <option value="ข้าว">ข้าว (Rice)</option>
+                            <option value="ยางพารา">ยางพารา (Rubber)</option>
+                            <option value="มันสำปะหลัง">มันสำปะหลัง (Cassava)</option>
+                            <option value="ข้าวโพดเลี้ยงสัตว์">ข้าวโพดเลี้ยงสัตว์ (Feed Corn)</option>
+                            <option value="ปาล์มน้ำมัน">ปาล์มน้ำมัน (Oil Palm)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="content-row">
+                    <div class="chart-card large-chart">
+                        <div class="card-header">
+                            <h3 class="card-title" id="prod-chart-title">พื้นที่เพาะปลูกและผลผลิตทางการเกษตร</h3>
+                            <p class="card-desc">สถิติสะสมระดับประเทศแยกตามปีเพาะปลูก</p>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="productionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3 class="card-title">สถิติประสิทธิภาพผลผลิต (Yield)</h3>
+                        </div>
+                        <div class="insight-content">
+                            <div class="stat-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">ผลผลิตรวมล่าสุด</span>
+                                    <span class="stat-val text-vino" id="prod-total-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">พื้นที่เก็บเกี่ยว</span>
+                                    <span class="stat-val" id="prod-harvest-area-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">ผลผลิตเฉลี่ยต่อไร่ (Yield/Harvest)</span>
+                                    <span class="stat-val text-gold" id="prod-yield-val">-</span>
+                                </div>
+                            </div>
+                            <hr class="card-divider">
+                            <div id="production-insights">
+                                <p>กำลังโหลดบทวิเคราะห์พื้นที่และผลผลิต...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: DAILY LIME -->
+            <div class="tab-pane" id="tab-daily">
+                <div class="content-row">
+                    <div class="chart-card large-chart">
+                        <div class="card-header">
+                            <h3 class="card-title">ราคามะนาว รายวัน (มะนาว ผลขนาดใหญ่พิเศษ)</h3>
+                            <p class="card-desc">เฝ้าระวังราคาขายส่ง ณ ตลาดกลางหนองบ้วย จ.เพชรบุรี (บาทต่อ 100 ผล)</p>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="limeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h3 class="card-title">ความเคลื่อนไหวราคารายวัน</h3>
+                        </div>
+                        <div class="insight-content">
+                            <div class="stat-list">
+                                <div class="stat-item">
+                                    <span class="stat-label">ราคาล่าสุด</span>
+                                    <span class="stat-val text-red" id="lime-latest-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">เฉลี่ย 30 วันที่ผ่านมา</span>
+                                    <span class="stat-val" id="lime-avg-val">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">ตลาดเก็บข้อมูล</span>
+                                    <span class="stat-val" style="font-size: 1.1rem;" id="lime-market-val">-</span>
+                                </div>
+                            </div>
+                            <hr class="card-divider">
+                            <div id="lime-insights">
+                                <p>กำลังวิเคราะห์ความเคลื่อนไหวราคามะนาวรายวัน...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-row mt-4">
+                    <div class="chart-card full-width">
+                        <div class="card-header">
+                            <h3 class="card-title">ตารางประวัติราคารายวันย้อนหลัง (30 วันล่าสุด)</h3>
+                        </div>
+                        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-striped" id="lime-table">
+                                <thead>
+                                    <tr>
+                                        <th>วันที่ข้อมูล</th>
+                                        <th>สินค้า</th>
+                                        <th>ตลาด</th>
+                                        <th>จังหวัด</th>
+                                        <th class="text-right">ราคาขายส่ง</th>
+                                        <th>หน่วย</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="6" class="text-center">กำลังโหลดข้อมูล...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="app-footer">
+        <div class="footer-container">
+            <p>ข้อมูลสนับสนุนโดย <strong>ศูนย์ข้อมูลเกษตรแห่งชาติ (NABC)</strong> กระทรวงเกษตรและสหกรณ์</p>
+            <p class="copyright">&copy; 2026 Thailand Agricultural Intelligence Dashboard. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Custom Script -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
